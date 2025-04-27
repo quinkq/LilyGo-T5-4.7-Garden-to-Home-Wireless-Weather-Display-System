@@ -5,7 +5,7 @@ My take on #LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes.
 
 Maintains original functionality - downloading OWM Weather via API, configuration AP, E-INK display handling and now:
 - employed FreeRTOS to facilitate concurrent sensor readings, calculations, running webserver and future tasks
-- introduced i2c sht40 sensor for localized temperature and humidity readouts
+- introduced i2c sht40 sensor for indoor temperature and humidity readouts
 - added ESP-NOW wireless data exchanges with auxiliary esp32 that reads bme280/sht40 environment sensors and sends them to the master (esp32s3 handling e-ink display) in between deep sleep periods
 - storing/buffering data as .csv on sd card
 - async webserver for an easy access to recent and saved historical data using graphs, converting .csv to jsons
