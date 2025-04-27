@@ -1,24 +1,36 @@
 My take on #LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes.
 
-<img src="https://github.com/user-attachments/assets/960a10ec-9fd1-4a30-b223-8aa1ab20414d" width="533" height="380">
+<img src="https://github.com/user-attachments/assets/33f88d13-cfac-4c53-ae1c-6c4ebd69de17" width="533" height="380">
 
 Maintains original functionality - downloading OWM Weather via API, configuration AP, E-INK display handling and now:
-- switched to freertos to facilitate concurrent sensor readings, calculations, running webserver and future tasks in between.
-- introduced i2c bme280/sht40 sensors for localized temperature and humidity readouts
-- ESP-NOW wireless data exchange with auxiliary esp32 using bme280/sht40 and taking temperature, humidity and pressure measurements and sending them to the master in between deep sleep periods
-- storing/buffering data on sd card
-- webserver for an easy access to recent and saved historical data using graphs
+- employed FreeRTOS to facilitate concurrent sensor readings, calculations, running webserver and future tasks
+- introduced i2c sht40 sensor for localized temperature and humidity readouts
+- added ESP-NOW wireless data exchanges with auxiliary esp32 that reads bme280/sht40 environment sensors and sends them to the master (esp32s3 handling e-ink display) in between deep sleep periods
+- storing/buffering data as .csv on sd card
+- async webserver for an easy access to recent and saved historical data using graphs, converting .csv to jsons
   
-<img src="https://github.com/user-attachments/assets/ed6c1b58-6862-463b-b6b7-1f70694c3fef" width="533" height="450">
+<img src="https://github.com/user-attachments/assets/f52dc17b-2dce-4d8e-971e-f06844adc592" width="533" height="450">
 
-- employed button for display selection/switching to better handle data (more to be added)
+- configuration webserver uses same async server now and offers OTA update functionality
+- employed external tactile switch for display selection/switching to better handle available data (more to be added)
 
-<img src="https://github.com/user-attachments/assets/95a5b678-3eb7-4179-ae55-b6922c1c2e5f" width="533" height="380">
-<img src="https://github.com/user-attachments/assets/cc47ac2d-3de3-46f2-a563-65018a9e7be8" width="533" height="380">
+<img src="https://github.com/user-attachments/assets/80480141-9f3e-458a-a08e-a9a692c5db92" width="533" height="380">
+<img src="https://github.com/user-attachments/assets/d98e1fc9-a67f-4e72-9a7a-6392e64241f0" width="533" height="380">
 
-Planned:
-- command repeating via ESP-NOW issued via web
-- much needed optimization
+- included modified original font converting script to create headers with polish diacritics
+
+PLANNED:
+- adding rainfall measurement and wind force/direction to the auxiliary ESP32 measuring station
+- cataloging and sharing 3d models
+- optimization
+
+
+auxiliary station:
+
+<img src="https://github.com/user-attachments/assets/1ca64978-6d8e-41b8-9564-cbe4c4ec27e0" width="533" height="380">
+<img src="https://github.com/user-attachments/assets/95319df9-c829-40e5-94ff-6c9d3cd74f79" width="533" height="380">
+<img src="https://github.com/user-attachments/assets/98b82852-1dbc-4b7d-8d0f-bd9042ccf343" width="533" height="380">
+
 
 
 
