@@ -1,6 +1,0 @@
-.vscode
-.pio
-owm_credentials.h
-config.json
-data/config.json
-.gitignore
