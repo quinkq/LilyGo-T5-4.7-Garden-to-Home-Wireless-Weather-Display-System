@@ -2,10 +2,6 @@ My take on LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes. Sa
 
 <img src="https://github.com/user-attachments/assets/6e8e3749-8823-45e2-ac7f-3206d61182bc" width="533" height="400">
 
-My 3D Models:
-- Display case [Lilygo T5 4.7" V2.3 E-Paper display case](https://www.printables.com/model/1277128-lilygo-t5-47-v23-e-paper-display-case)
-- Data gathering station [Remote weather data gathering station](https://www.printables.com/model/1277283-steven-remote-weather-data-gathering-station)
-
 Maintains original functionality - downloading OWM Weather via API, configuration AP, E-INK display handling and now:
 - employed FreeRTOS to facilitate concurrent sensor readings, calculations, running webserver and future tasks
 - introduced i2c sht40 sensor for indoor temperature and humidity readouts
@@ -35,6 +31,10 @@ auxiliary station:
 <img src="https://github.com/user-attachments/assets/14c694b6-0cba-430c-b175-a58802c0a82c" width="533" height="708">
 <img src="https://github.com/user-attachments/assets/98b82852-1dbc-4b7d-8d0f-bd9042ccf343" width="533" height="400">
 <img src="https://github.com/user-attachments/assets/e19d3365-910b-4681-8378-3d9202ba643d" width="533" height="400">
+
+My 3D Models:
+- Display case [Lilygo T5 4.7" V2.3 E-Paper display case](https://www.printables.com/model/1277128-lilygo-t5-47-v23-e-paper-display-case)
+- Data gathering station [Remote weather data gathering station](https://www.printables.com/model/1277283-steven-remote-weather-data-gathering-station)
 
 
 
