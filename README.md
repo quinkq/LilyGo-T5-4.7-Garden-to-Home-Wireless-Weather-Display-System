@@ -1,7 +1,10 @@
-My take on #LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes.
+My take on LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes. Same as original, work continued in PlatformiO.
 
 <img src="https://github.com/user-attachments/assets/6e8e3749-8823-45e2-ac7f-3206d61182bc" width="533" height="400">
 
+My 3D Models:
+- Display case [Lilygo T5 4.7" V2.3 E-Paper display case](https://www.printables.com/model/1277128-lilygo-t5-47-v23-e-paper-display-case)
+- Data gathering station [Remote weather data gathering station](https://www.printables.com/model/1277283-steven-remote-weather-data-gathering-station)
 
 Maintains original functionality - downloading OWM Weather via API, configuration AP, E-INK display handling and now:
 - employed FreeRTOS to facilitate concurrent sensor readings, calculations, running webserver and future tasks
@@ -19,10 +22,6 @@ Maintains original functionality - downloading OWM Weather via API, configuratio
 <img src="https://github.com/user-attachments/assets/d98e1fc9-a67f-4e72-9a7a-6392e64241f0" width="533" height="400">
 
 - included modified original font converting script to create headers with polish diacritics
-
-3D Models:
-- Display case https://www.printables.com/model/1277128-lilygo-t5-47-v23-e-paper-display-case
-- Gathering station ...
 
 PLANNED:
 - adding rainfall measurement and wind force/direction to the auxiliary ESP32 measuring station
