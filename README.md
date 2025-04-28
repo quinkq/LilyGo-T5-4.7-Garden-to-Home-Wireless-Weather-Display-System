@@ -1,6 +1,7 @@
 My take on LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes. Same as original, developed using PlatformiO.
 
-<img src="https://github.com/user-attachments/assets/6e8e3749-8823-45e2-ac7f-3206d61182bc" width="533" height="400">
+<img src="https://github.com/user-attachments/assets/83122ad7-aca4-48b6-8d79-b33b7255faec" width="533" height="400">
+
 
 Maintains original functionality - downloading OWM Weather via API, configuration AP, E-INK display handling and now:
 - employed FreeRTOS to facilitate concurrent sensor readings, calculations, running webserver and future tasks
