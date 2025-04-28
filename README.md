@@ -1,4 +1,4 @@
-My take on LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes. Same as original, work continued in PlatformiO.
+My take on LilyGo-EPD-4-7-OWM-Weather-Display with adapting for own purposes. Same as original, developed using PlatformiO.
 
 <img src="https://github.com/user-attachments/assets/6e8e3749-8823-45e2-ac7f-3206d61182bc" width="533" height="400">
 
