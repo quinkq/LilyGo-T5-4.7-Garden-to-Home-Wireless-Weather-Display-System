@@ -18,8 +18,8 @@ Maintains original functionality - downloading OWM Weather via API, configuratio
 - employed external tactile switch for display selection/switching to better handle available data (more to be added)
 - included modified original font converting script to create headers with polish diacritics
 <br/>
-  
-<img src="https://github.com/user-attachments/assets/f52dc17b-2dce-4d8e-971e-f06844adc592" width="533" height="708">
+
+<img src="https://github.com/user-attachments/assets/c1a7c9a5-a26a-4570-8a4d-12af104926ec" width="533" height="708">
 <img src="https://github.com/user-attachments/assets/80480141-9f3e-458a-a08e-a9a692c5db92" width="533" height="400">
 <img src="https://github.com/user-attachments/assets/d98e1fc9-a67f-4e72-9a7a-6392e64241f0" width="533" height="400">  
 
