@@ -5,6 +5,7 @@ My take on <b>LilyGo-EPD-4-7-OWM-Weather-Display</b> with a few adaptations for 
 
 <img src="https://github.com/user-attachments/assets/83122ad7-aca4-48b6-8d79-b33b7255faec" width="533" height="400">
 
+
 <br/>
 <br/>
 
@@ -18,7 +19,7 @@ Maintains original functionality - downloading OWM Weather via API, configuratio
 - employed external tactile switch for display selection/switching to better handle available data (more to be added)
 - included modified original font converting script to create headers with polish diacritics
 <br/>
-
+<img src="https://github.com/user-attachments/assets/ba9a9d2b-9898-49e4-a33d-6e503065071f" width="533" height="708">
 <img src="https://github.com/user-attachments/assets/c1a7c9a5-a26a-4570-8a4d-12af104926ec" width="533" height="708">
 <img src="https://github.com/user-attachments/assets/80480141-9f3e-458a-a08e-a9a692c5db92" width="533" height="400">
 <img src="https://github.com/user-attachments/assets/d98e1fc9-a67f-4e72-9a7a-6392e64241f0" width="533" height="400">  
@@ -50,7 +51,7 @@ Stevenson screen temperature tower
 
 <img src="https://github.com/user-attachments/assets/ff265706-a485-4416-9e9e-c670f0703ca8" width="533" height="400">
 <img src="https://github.com/user-attachments/assets/95319df9-c829-40e5-94ff-6c9d3cd74f79" width="533" height="400">
-<img src="https://github.com/user-attachments/assets/14c694b6-0cba-430c-b175-a58802c0a82c" width="533" height="708">
+<img src="https://github.com/user-attachments/assets/7ac66dbe-9d68-43b4-b7b0-f4c474b14289" width="533" height="708">
 <img src="https://github.com/user-attachments/assets/98b82852-1dbc-4b7d-8d0f-bd9042ccf343" width="533" height="400">
 <img src="https://github.com/user-attachments/assets/e19d3365-910b-4681-8378-3d9202ba643d" width="533" height="400">
 
