@@ -105,4 +105,10 @@ double NormalizedMoonPhase(int d, int m, int y);
 int JulianDate(int d, int m, int y);
 uint8_t calcBatPercentage(float voltage);
 
+// SHT4x sensor status tracking (extern declarations)
+extern bool sht4xSensorOnline;
+extern int sht4xRetryCount;
+extern const int MAX_SHT4X_RETRIES;
+extern unsigned long sht4xLastRetryTime;
+
 #endif // #endif

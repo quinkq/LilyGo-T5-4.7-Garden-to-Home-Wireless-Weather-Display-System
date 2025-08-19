@@ -83,7 +83,7 @@ String Date_str = "-- --- ----";
 #define max_readings 8 // (was 24!) Limited to 1-day here, but could go to 5-days = 40
 
 //RTC_DATA_ATTR - storing in RTC memory for deel sleeps
-RTC_DATA_ATTR int screenState = 0; // default screen state
+RTC_DATA_ATTR volatile int screenState = 0; // default screen state
 
 Forecast_record_type WxConditions[1];
 Forecast_record_type WxForecast[max_readings];
@@ -95,6 +95,12 @@ float rain_readings[max_readings]        = {0};
 float snow_readings[max_readings]        = {0};
 
 // (obsolete - now calculated in Idle task) const int SleepDuration = 2; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
+
+// SHT4x sensor status tracking
+bool sht4xSensorOnline = true;  // Sensor status - true = online, false = offline
+int sht4xRetryCount = 0;        // Current retry attempt count
+const int MAX_SHT4X_RETRIES = 8; // Maximum retry attempts before marking offline
+unsigned long sht4xLastRetryTime = 0; // Timestamp of last retry attempt for periodic retries
 bool SleepHoursEnabled = false;
 bool DeepSleepEnabled = false;
 int WakeupHour    = 5;  // Don't wakeup until after 07:00 to save battery power
@@ -112,7 +118,6 @@ uint8_t batteryPercentageWS = 100;
 
 // WiFi / ESP-NOW transmission settings
 uint8_t receiverMac[] = {0x84, 0xF7, 0x03, 0x3A, 0xA8, 0x58}; // set MAC adress of ESP you'll be exchanging data with
-bool dataReceivedFlag = false;
 bool timeIsSet = false;
 int WiFiStatus = WL_DISCONNECTED;
 
@@ -351,7 +356,7 @@ void rotateLogFile(const char *filename) {
     }
     
     // Create backup filename with date
-    char backupFilename[50];
+    char backupFilename[64];
     // Get current date from RTC or system
     // Format: bacMMDDYY.filename
     time_t now;
@@ -367,9 +372,14 @@ void rotateLogFile(const char *filename) {
         baseFilename = filename; // No directory in path
     }
     
-    // Format backup filename with date prefix
-    snprintf(backupFilename, sizeof(backupFilename), "/bac%02d%02d%02d.%s", 
+    // Format backup filename with date prefix - with bounds checking
+    int written = snprintf(backupFilename, sizeof(backupFilename), "/bac%02d%02d%02d.%s", 
              timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_year % 100, baseFilename);
+    
+    if (written >= sizeof(backupFilename)) {
+        Serial.printf("ERROR: Backup filename too long, truncated: %s\n", backupFilename);
+        return; // Skip rotation if filename doesn't fit
+    }
     
     Serial.printf("Rotating log file %s to %s\n", filename, backupFilename);
     
@@ -394,8 +404,13 @@ void InitialiseDisplay()
     epd_init();
     
     framebuffer = (uint8_t *)ps_calloc(sizeof(uint8_t), EPD_WIDTH * EPD_HEIGHT / 2);
-    if (!framebuffer)
-        Serial.println("Memory alloc failed!");
+    if (!framebuffer) {
+        Serial.println("CRITICAL: Framebuffer memory allocation failed!");
+        Serial.printf("Free heap: %d bytes\n", esp_get_free_heap_size());
+        esp_restart(); // Restart if critical allocation fails
+    }
+    Serial.printf("Framebuffer allocated: %d bytes, Free heap: %d bytes\n", 
+                  EPD_WIDTH * EPD_HEIGHT / 2, esp_get_free_heap_size());
     memset(framebuffer, 0xFF, EPD_WIDTH * EPD_HEIGHT / 2);
 }
 
@@ -863,7 +878,7 @@ void RenderSensorReadingsGarden(int x, int y, SensorData outsideData)
 
 void RenderSensorReadingsRoom(int x, int y, SensorData insideData)
 {
-    if (insideData.timestamp > 1700000000) 
+    if (insideData.timestamp > 1700000000 && sht4xSensorOnline) 
     {
         setFont(OpenSansB12);
         drawString(x, y, "Czujnik DOM", LEFT);
@@ -876,9 +891,20 @@ void RenderSensorReadingsRoom(int x, int y, SensorData insideData)
     }
     else
     {
-        ESP_LOGW("DISPLAY", "Failed to receive processed data from queue");
+        if (!sht4xSensorOnline) {
+            ESP_LOGW("DISPLAY", "SHT4x sensor offline - displaying status");
+        } else {
+            ESP_LOGW("DISPLAY", "Failed to receive processed data from queue");
+        }
         setFont(OpenSansB12);
-        drawString(x, y, "Czujnik dom", LEFT);
+        drawString(x, y, "Czujnik DOM", LEFT);
+        setFont(OpenSans8B);
+        // Show "NIEDOSTĘPNY" when sensor is offline, otherwise show "--:--"
+        if (!sht4xSensorOnline) {
+            drawString(x, y+32, "NIEDOSTEPNY", LEFT);
+        } else {
+            drawString(x, y+32, "--:--", LEFT);
+        }
         setFont(OpenSansB28);
         drawString(x, y+50, String("--.-") + "°", LEFT);
         setFont(OpenSansB24);
@@ -900,8 +926,6 @@ void RenderXLSensorReadingsGarden(int x, int y, SensorData outsideData)
         drawString(x+220, y+100, "   " + String(outsideData.humidity, 0) + "%", LEFT);
         setFont(OpenSansB40);
         drawString(x, y+200, String(outsideData.pressure, 0) + " hPa", LEFT);
-
-        dataReceivedFlag == false;
     }
     else
     {
@@ -918,7 +942,7 @@ void RenderXLSensorReadingsGarden(int x, int y, SensorData outsideData)
 
 void RenderXLSensorReadingsRoom(int x, int y, SensorData insideData)
 {
-    if (insideData.timestamp > 1700000000) 
+    if (insideData.timestamp > 1700000000 && sht4xSensorOnline) 
     {
         ESP_LOGI("DISPLAY", "Local sensor data available.");
         setFont(OpenSansB28);
@@ -932,9 +956,20 @@ void RenderXLSensorReadingsRoom(int x, int y, SensorData insideData)
     }
     else
     {
-        ESP_LOGW("DISPLAY", "Failed to receive processed data from queue");
+        if (!sht4xSensorOnline) {
+            ESP_LOGW("DISPLAY", "SHT4x sensor offline - displaying status");
+        } else {
+            ESP_LOGW("DISPLAY", "Failed to receive processed data from queue");
+        }
         setFont(OpenSansB28);
-        drawString(x, y, "Czujnik dom", LEFT);
+        drawString(x, y, "Czujnik DOM", LEFT);
+        setFont(OpenSansB12);
+        // Show "NIEDOSTĘPNY" when sensor is offline, otherwise show "--:--"
+        if (!sht4xSensorOnline) {
+            drawString(x, y+75, "NIEDOSTĘPNY", LEFT);
+        } else {
+            drawString(x, y+75, "--:--", LEFT);
+        }
         setFont(OpenSansB50);
         drawString(x, y+100, String("--.-") + "°", LEFT);
         setFont(OpenSansB40);
@@ -1144,7 +1179,7 @@ void DrawPressureAndTrend(int x, int y, float pressure, String slope)
 float SumOfPrecip(float DataArray[], int readings)
 {
     float sum = 0;
-    for (int i = 0; i <= readings; i++)
+    for (int i = 0; i < readings; i++)
     {
         sum += DataArray[i];
     }
@@ -1281,6 +1316,16 @@ void epd_update()
     epd_draw_grayscale_image(epd_full_screen(), framebuffer); // Update the screen
 }
 
+// Optional cleanup function
+void cleanup_display()
+{
+    if (framebuffer) {
+        free(framebuffer);
+        framebuffer = NULL;
+        ESP_LOGI("CLEANUP", "Framebuffer memory freed");
+    }
+}
+
 
 //################################### Tasks ######################################################################//
 
@@ -1351,9 +1396,54 @@ void ConfigTask(void *pvParameters)
     vTaskDelete(NULL); // Delete the task when done - first boot
 }
 
+// Helper function to calculate exponential backoff delay
+unsigned long getExponentialBackoffDelay(int retryCount) {
+    // Base delay of 1 second, exponentially increasing: 1s, 2s, 4s, 8s, 16s, 32s, 64s, 128s
+    if (retryCount > MAX_SHT4X_RETRIES) retryCount = MAX_SHT4X_RETRIES;
+    return (1UL << retryCount) * 1000; // Convert to milliseconds
+}
+
+// Helper function to attempt sensor recovery with exponential backoff
+bool attemptSensorRecovery(sht4x_t* dev, uint8_t* duration) {
+    int attemptCount = 0;
+    
+    while (attemptCount < MAX_SHT4X_RETRIES) {
+        ESP_LOGI("SHT40", "Attempting SHT4x recovery, try %d/%d", attemptCount + 1, MAX_SHT4X_RETRIES);
+        
+        memset(dev, 0, sizeof(sht4x_t));
+        
+        // Try to initialize descriptor and sensor
+        if (sht4x_init_desc(dev, 0, I2C_MASTER_SDA, I2C_MASTER_SCL) == ESP_OK &&
+            sht4x_init(dev) == ESP_OK) {
+            *duration = sht4x_get_measurement_duration(dev);
+            sht4xSensorOnline = true;
+            sht4xRetryCount = 0;
+            ESP_LOGI("SHT40", "SHT4x sensor recovered successfully!");
+            return true;
+        }
+        
+        attemptCount++;
+        ESP_LOGE("SHT40", "SHT4x recovery failed, attempt %d/%d", attemptCount, MAX_SHT4X_RETRIES);
+        
+        if (attemptCount < MAX_SHT4X_RETRIES) {
+            unsigned long delay = getExponentialBackoffDelay(attemptCount - 1);
+            ESP_LOGI("SHT40", "Retrying in %lu ms...", delay);
+            vTaskDelay(pdMS_TO_TICKS(delay));
+        }
+    }
+    
+    // All attempts failed
+    sht4xSensorOnline = false;
+    sht4xRetryCount = MAX_SHT4X_RETRIES;
+    sht4xLastRetryTime = millis();
+    ESP_LOGE("SHT40", "SHT4x sensor recovery failed after %d attempts. Will retry later.", MAX_SHT4X_RETRIES);
+    return false;
+}
+
 // Task for obtaining i2c sensor reading
 void SHT4xReadTask(void *pvParameters)
 {
+    
     static sht4x_t dev;
     SensorData sht4xdata;
     sht4xdata.pressure = 0;
@@ -1361,11 +1451,12 @@ void SHT4xReadTask(void *pvParameters)
     sht4xdata.filename = "/inside_log.csv";
     sht4xdata.batPercentage = 100;
 
-    //Init SHT4x sensor
-    memset(&dev, 0, sizeof(sht4x_t));
-    ESP_ERROR_CHECK(sht4x_init_desc(&dev, 0, I2C_MASTER_SDA, I2C_MASTER_SCL));
-    ESP_ERROR_CHECK(sht4x_init(&dev));
-    uint8_t duration = sht4x_get_measurement_duration(&dev); // Get the measurement duration for high repeatability;
+    //Init SHT4x sensor with retry logic
+    uint8_t duration = 0;
+    
+    // Try to initialize sensor with exponential backoff
+    ESP_LOGI("SHT40", "Starting SHT4x sensor initialization...");
+    attemptSensorRecovery(&dev, &duration);
 
     while (1)
     {   
@@ -1379,37 +1470,56 @@ void SHT4xReadTask(void *pvParameters)
         sht4xdata.batPercentage = batteryPercentageWS;
         ESP_LOGW("BATT", "Battery voltage: %f, percentage: %d", voltageWS, batteryPercentageWS);
         
-        // Trigger one measurement in single shot mode with high repeatability.
-        //ESP_ERROR_CHECK(sht4x_start_measurement(&dev)); - gentler error check below instead of hard-failing
-        if (sht4x_start_measurement(&dev) != ESP_OK) {
-            ESP_LOGE("SHT40", "Failed to start measurement. Skipping this cycle.");
-            xSemaphoreGive(sht4xCompleteSem);
-            continue;
+        // Check if sensor is offline and try periodic retry (every 15 minutes = 900000 ms)
+        if (!sht4xSensorOnline && (millis() - sht4xLastRetryTime > 900000)) {
+            ESP_LOGI("SHT40", "Starting periodic SHT4x sensor recovery with exponential backoff...");
+            attemptSensorRecovery(&dev, &duration);
         }
-        // Wait until measurement is ready (duration returned from *sht4x_get_measurement_duration*).
-        vTaskDelay(duration); // duration is in ticks
-
-        // retrieve the values and send it to the queue
-        if(sht4x_get_results(&dev, &sht4xdata.temperature, &sht4xdata.humidity) == ESP_OK)
-        {
-            sht4xdata.temperature -= 0.4; // Rough 0.4 C correction factor due to internal heating from screen
-            sht4xdata.humidity -= 5; // Rough 5% correction factor
-            sht4xdata.timestamp = time(NULL); // Using current system timestamp
+        
+        // Only attempt measurement if sensor is online
+        if (sht4xSensorOnline) {
+            // Trigger one measurement in single shot mode with high repeatability.
+            if (sht4x_start_measurement(&dev) != ESP_OK) {
+                ESP_LOGE("SHT40", "Failed to start measurement. Marking sensor offline for periodic recovery.");
+                sht4xSensorOnline = false;
+                sht4xLastRetryTime = millis();
+                xSemaphoreGive(sht4xCompleteSem);
+                continue;
+            }
             
-            if (xQueueSend(sensorDataQueue, &sht4xdata, pdMS_TO_TICKS(1000)) == pdPASS) 
+            // Wait until measurement is ready (duration returned from *sht4x_get_measurement_duration*).
+            vTaskDelay(duration); // duration is in ticks
+
+            // retrieve the values and send it to the queue
+            if(sht4x_get_results(&dev, &sht4xdata.temperature, &sht4xdata.humidity) == ESP_OK)
             {
+                // Reset retry count on successful measurement
+                sht4xRetryCount = 0;
                 
-                ESP_LOGI("SHT40", "SHT40 Data enqueued SHT40 Temperature: %.2f °C, Humidity: %.2f Timestamp: %d", sht4xdata.temperature, sht4xdata.humidity, sht4xdata.timestamp);
+                sht4xdata.temperature -= 0.4; // Rough 0.4 C correction factor due to internal heating from screen
+                sht4xdata.humidity -= 5; // Rough 5% correction factor
+                sht4xdata.timestamp = time(NULL); // Using current system timestamp
+                
+                if (xQueueSend(sensorDataQueue, &sht4xdata, pdMS_TO_TICKS(1000)) == pdPASS) 
+                {
+                    
+                    ESP_LOGI("SHT40", "SHT40 Data enqueued SHT40 Temperature: %.2f °C, Humidity: %.2f Timestamp: %d", sht4xdata.temperature, sht4xdata.humidity, sht4xdata.timestamp);
+                }
+                else
+                {
+                    ESP_LOGI("SHT40", "Failed to send data to sensorDataQueue in time");
+                }
             }
             else
             {
-                ESP_LOGI("SHT40", "Failed to send data to sensorDataQueue in time");
+                ESP_LOGE("SHT40", "SHT40 Failed to read sensor data. Marking sensor offline for periodic recovery.");
+                sht4xSensorOnline = false;
+                sht4xLastRetryTime = millis();
             }
+        } else {
+            ESP_LOGW("SHT40", "SHT4x sensor is offline, skipping measurement");
         }
-        else
-        {
-            ESP_LOGI("SHT40", "SHT40 Failed to read sensor data.");
-        }
+        
         xSemaphoreGive(sht4xCompleteSem);
     }
 }
@@ -1569,13 +1679,17 @@ void IdleTask(void *pvParameters) {
 // Main data fetch and display rendering task
 void WeatherUpdateTask(void *pvParameters)
 {
+    // Add this task to watchdog monitoring - main cycle watchdog
+    esp_task_wdt_add(NULL);
+    
     BaseType_t xReturned;
     WiFiClient client;
     while (1)
     {
+        esp_task_wdt_reset(); // Reset watchdog at start of each 15-minute cycle
         xSemaphoreGive(sht4xTriggerSem); 
-        ESP_LOGI("wUpdate", "Checking for ESP-NOW transaction completion (30s)...");
-        if(xSemaphoreTake(dataExhangeCompleteSem, SECONDS_TO_TICKS(30)) != pdTRUE) // Proceed if received ESP-NOW packet and sent ack during 30s timeout OR button has been pressed (same sem)
+        ESP_LOGI("wUpdate", "Checking for ESP-NOW transaction completion (15s)...");
+        if(xSemaphoreTake(dataExhangeCompleteSem, SECONDS_TO_TICKS(15)) != pdTRUE) // Proceed if received ESP-NOW packet and sent ack during 30s timeout OR button has been pressed (same sem)
         {
             ESP_LOGE("wUpdate", "Failed to receive OUTSIDE sensor data in time.");
         }
@@ -1701,17 +1815,26 @@ void setup()
     attachInterrupt(digitalPinToInterrupt(USR_BUTTON), ButtonISR, RISING);
 
 
-    // Create tasks with error checking
+    // Create tasks with error checking and recovery
     BaseType_t xReturned;
+    
+    // Create ConfigTask - critical for system operation
     xReturned = xTaskCreate(ConfigTask, "ConfigTask", 8192, NULL, 5, NULL);
     if (xReturned != pdPASS) 
     {
-        ESP_LOGE("SETUP", "Failed to create Config Task");
-        return;
+        ESP_LOGE("SETUP", "CRITICAL: Failed to create Config Task. Free heap: %d", esp_get_free_heap_size());
+        ESP_LOGE("SETUP", "System cannot continue without configuration. Restarting...");
+        vTaskDelay(pdMS_TO_TICKS(2000)); // Allow log output
+        esp_restart();
     }
+    ESP_LOGI("SETUP", "ConfigTask created successfully");
 
     xSemaphoreTake(configSemaphore, portMAX_DELAY); // Waiting to load configuration or config web server to finish
 
+    // Initialize watchdog timer with 16-minute timeout for main cycle monitoring
+    esp_task_wdt_init(16 * 60, true); // 16 minutes = 960 seconds
+    ESP_LOGI("SETUP", "Watchdog timer initialized with 16-minute timeout");
+    
     // Start wifi and get ntp update
     WiFiStatus = StartWiFi();  // Functions runs here
     timeIsSet = SetTime();
@@ -1743,32 +1866,46 @@ void setup()
     }
 
 
+    // Create SHT4x sensor task - important but not critical
     xReturned = xTaskCreate(SHT4xReadTask, "SHT4xReadTask", 4096, NULL, 3, NULL);
     if (xReturned != pdPASS) 
     {
-        ESP_LOGE("SETUP", "Failed to create SHT4x task");
-        return;
+        ESP_LOGE("SETUP", "WARNING: Failed to create SHT4x task. Free heap: %d", esp_get_free_heap_size());
+        ESP_LOGW("SETUP", "System will continue without local sensor readings");
+    } else {
+        ESP_LOGI("SETUP", "SHT4xReadTask created successfully");
     }
 
+    // Create data distributor task - critical for data flow
     xReturned = xTaskCreate(dataDistributorTask, "dataDistributorTask", 4096, NULL, 4, NULL);
     if (xReturned != pdPASS) 
     {
-        ESP_LOGE("SETUP", "Failed to create SHT4x task");
-        return;
+        ESP_LOGE("SETUP", "CRITICAL: Failed to create dataDistributorTask. Free heap: %d", esp_get_free_heap_size());
+        ESP_LOGE("SETUP", "Data distribution essential for operation. Restarting...");
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        esp_restart();
     }
+    ESP_LOGI("SETUP", "dataDistributorTask created successfully");
 
+    // Create main weather update task - critical for primary functionality
     xReturned = xTaskCreate(WeatherUpdateTask, "WeatherUpdateTask", 8192, NULL, 4, NULL);
     if (xReturned != pdPASS) 
     {
-        ESP_LOGE("SETUP", "Failed to create WeatherUpdate Task");
-        return;
+        ESP_LOGE("SETUP", "CRITICAL: Failed to create WeatherUpdateTask. Free heap: %d", esp_get_free_heap_size());
+        ESP_LOGE("SETUP", "Main functionality cannot operate. Restarting...");
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        esp_restart();
     }
+    ESP_LOGI("SETUP", "WeatherUpdateTask created successfully");
 
+    // Create SD logging task - important but not critical
     xReturned = xTaskCreate(SDLogTask, "SDLogTask", 8192, NULL, 2, NULL);
     if (xReturned != pdPASS) 
     {
-        ESP_LOGE("SETUP", "Failed to create SDLogTask Task");
-        return;
+        ESP_LOGE("SETUP", "WARNING: Failed to create SDLogTask. Free heap: %d", esp_get_free_heap_size());
+        ESP_LOGW("SETUP", "System will continue without data logging to SD card");
+    } else {
+        ESP_LOGI("SETUP", "SDLogTask created successfully");
     }
 
     ESP_LOGI("SETUP", "All tasks created successfully");

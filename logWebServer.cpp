@@ -2,6 +2,12 @@
 #include <FS.h>
 #include <time.h>
 
+// External declarations for sensor status tracking
+extern bool sht4xSensorOnline;
+extern int sht4xRetryCount;
+extern const int MAX_SHT4X_RETRIES;
+extern unsigned long sht4xLastRetryTime;
+
 const char* insideLogFile = "/inside_log.csv";
 const char* outsideLogFile = "/outside_log.csv";
 
@@ -77,6 +83,10 @@ void setupLogWebServer() {
             jsonDoc["oP"] = roundToOneDecimal(latestOutside.pressure);
             jsonDoc["otS"] = latestOutside.timestamp;
             jsonDoc["oBat"] = latestOutside.batPercentage;
+            
+            // Add sensor status information
+            jsonDoc["sht4xOnline"] = sht4xSensorOnline;
+            jsonDoc["sht4xRetries"] = sht4xRetryCount;
                 
         } else {
             // Fallback to file reading if queue data isn't available
@@ -133,6 +143,10 @@ void setupLogWebServer() {
                     jsonDoc["oBat"] = latestOutside.batPercentage;
                 }
             }
+            
+            // Add sensor status information (same for both branches)
+            jsonDoc["sht4xOnline"] = sht4xSensorOnline;
+            jsonDoc["sht4xRetries"] = sht4xRetryCount;
         }
     
         char response[256];
@@ -150,7 +164,8 @@ void setupLogWebServer() {
 
         const char* range = request->getParam("range")->value().c_str();
         int range_hours = getTimeLimitHours(range);
-
+        
+        Serial.printf("[DEBUG] /minmax endpoint called with range='%s' (%d hours)\\n", range, range_hours);
         StaticJsonDocument<1024> jsonDoc;
         calculateMinMaxAvg(insideLogFile, range_hours, jsonDoc, "inside");
         calculateMinMaxAvg(outsideLogFile, range_hours, jsonDoc, "outside");
@@ -195,52 +210,59 @@ void setupLogWebServer() {
             }
         }
     
+        // Check if files exist before generation
         if (needsGeneration) {
             if (!generateStreamingJSONData(range)) {
                 request->send(500, "text/plain", "Failed to generate data");
                 return;
             }
         }
+        
+        // Verify files exist after potential generation
+        if (!SD.exists(insideFile) || !SD.exists(outsideFile)) {
+            Serial.println("[ERROR] Missing JSON files after generation");
+            request->send(500, "text/plain", "Missing data files");
+            return;
+        }
     
-        // Read Inside JSON
+        // Read Inside JSON with optimized memory allocation
         String insideData = "[]";
         File file = SD.open(insideFile, FILE_READ);
         if (file) {
             size_t size = file.size();
             if (size > 0) {
-                char* buffer = (char*)malloc(size + 1);
-                if (buffer) {
-                    size_t bytesRead = file.readBytes(buffer, size);
-                    buffer[bytesRead] = '\0';
-                    insideData = buffer;
-                    free(buffer);
-                }
+                insideData.reserve(size);
+                insideData = file.readString();
             }
             file.close();
         } else {
             Serial.printf("[ERROR] Missing file: %s\n", insideFile);
         }
     
-        // Read Outside JSON
+        // Read Outside JSON with optimized memory allocation
         String outsideData = "[]";
         file = SD.open(outsideFile, FILE_READ);
         if (file) {
             size_t size = file.size();
             if (size > 0) {
-                char* buffer = (char*)malloc(size + 1);
-                if (buffer) {
-                    size_t bytesRead = file.readBytes(buffer, size);
-                    buffer[bytesRead] = '\0';
-                    outsideData = buffer;
-                    free(buffer);
-                }
+                outsideData.reserve(size);
+                outsideData = file.readString();
             }
             file.close();
         } else {
             Serial.printf("[ERROR] Missing file: %s\n", outsideFile);
         }
     
-        String response = "{\"inside\": " + insideData + ", \"outside\": " + outsideData + "}";
+        // Build response with pre-allocated memory to prevent fragmentation
+        String response;
+        response.reserve(insideData.length() + outsideData.length() + 30);
+        response = "{\"inside\":" + insideData + ",\"outside\":" + outsideData + "}";
+        
+        // Single debug line with comprehensive info
+        Serial.printf("[DEBUG] Response: %d bytes (I:%d O:%d) - %s\n", 
+                     response.length(), insideData.length(), outsideData.length(),
+                     needsGeneration ? "generated" : "cached");
+        
         request->send(200, "application/json", response);
     });
 
@@ -408,6 +430,7 @@ void calculateMinMaxAvg(const char* filename, int range_hours, JsonDocument &jso
     float minPressure = 9999, maxPressure = -9999, sumPressure = 0;
     int count = 0, currentTime = time(nullptr);
     int timeLimit = currentTime - (range_hours * 3600);
+    
 
     int minTempTime = 0, maxTempTime = 0;
     int minHumidityTime = 0, maxHumidityTime = 0;
@@ -509,8 +532,10 @@ void calculateMinMaxAvg(const char* filename, int range_hours, JsonDocument &jso
             jsonDoc["outside_pressure_max_time"] = maxPressureTime;
             jsonDoc["outside_pressure_avg"] = roundToOneDecimal(sumPressure / count);
         }
+        
+        Serial.printf("[DEBUG] MinMax %s sensor: Found %d data points in last %d hours\\n", prefix, count, range_hours);
     } else {
-        Serial.printf("[WARNING] No data found for range: %d hours\n", range_hours);
+        Serial.printf("[WARNING] No %s sensor data found in last %d hours - check sensor connectivity/timestamps\\n", prefix, range_hours);
     }
 }
 
@@ -714,4 +739,3 @@ void cleanupOldCustomJSONs() {
     }
     root.close();
 }
-

@@ -110,6 +110,7 @@
                     <p><span class="stat-label">Wilgotność:</span> <b><span id="iH">--</span> %</b></p>
                     <p><span class="timestamp-placeholder" id="itS">--</span></p>
                     <p><span class="timestamp-placeholder">Bateria:</span> <b><span id="iBat">--</span> %</b></p>
+                    <p><span class="stat-label">Status czujnika:</span> <b><span id="sht4xStatus" style="color: #00ff00;">ONLINE</span></b></p>
                 </div>
             </div>
         </div>
@@ -217,6 +218,21 @@
                                 timeStyle: 'short'
                             })})`;
                     }
+                    
+                    // Update sensor status
+                    const statusElement = document.getElementById('sht4xStatus');
+                    if (data.sht4xOnline !== undefined) {
+                        if (data.sht4xOnline) {
+                            statusElement.textContent = 'ONLINE';
+                            statusElement.style.color = '#00ff00'; // Green
+                        } else {
+                            statusElement.textContent = 'NIEDOSTĘPNY';
+                            statusElement.style.color = '#ff0000'; // Red
+                            
+                            // Also update the timestamp to show offline status
+                            document.getElementById('itS').textContent = 'NIEDOSTĘPNY';
+                        }
+                    }
                 })
                 .catch(error => {
                     console.error("Error fetching latest readings:", error);
@@ -230,6 +246,12 @@
             // If the range is "custom" but no customRangeValue was provided, use the stored data attribute
             if (range === "custom" && !customRangeValue) {
                 range = document.getElementById("globalRange").getAttribute('data-custom-range') || "24h";
+            }
+            
+            // Additional validation - ensure range is never empty or null
+            if (!range || range.trim() === "" || range === null || range === undefined) {
+                console.warn("Invalid or empty range detected in updateMinMaxAvg, defaulting to '24h'");
+                range = "24h";
             }
             
             fetch(`/minmax?range=${range}`)
@@ -380,7 +402,13 @@
                 range = document.getElementById("globalRange").getAttribute('data-custom-range') || "24h";
             }
             
-            console.log("Fetching chart data for range:", range);
+            // Additional validation - ensure range is never empty or null
+            if (!range || range.trim() === "" || range === null || range === undefined) {
+                console.warn("Invalid or empty range detected, defaulting to '24h'");
+                range = "24h";
+            }
+            
+            console.log("Fetching chart data for range:", range, "(length:", range.length, ")");
 
             // Add a flag to prevent multiple simultaneous fetches
             if (window.fetchingGraphData) {
